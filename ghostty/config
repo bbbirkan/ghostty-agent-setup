@@ -20,3 +20,11 @@ window-save-state = always
 # Ask before closing a window that still has a running job,
 # so a long agent run is never killed by an accidental Cmd+W.
 confirm-close-surface = true
+
+# ---- Optional: readability pack (remove the leading "# " to enable, then Cmd+Shift+, to reload) ----
+# theme = GitHub Dark High Contrast   # highest contrast dark theme; try `ghostty +list-themes` for 400+ more
+# font-size = 15                      # tired eyes? try 15-16 (Cmd+ / Cmd- also zoom live)
+# minimum-contrast = 3                # lifts grey-on-grey text from tools like lazygit (1 = off, 3 = comfortable)
+# adjust-cell-height = 10%            # a little air between lines
+# font-thicken = true                 # slightly bolder strokes; helps on light themes
+# theme = light:Catppuccin Latte,dark:Catppuccin Mocha   # follow macOS light/dark mode (use instead of the line above)
