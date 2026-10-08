@@ -1,13 +1,17 @@
 #!/bin/bash
 # panel [-c] [dir1 dir2 dir3 dir4]
-# Opens a 2x2 tmux grid, one folder per pane. Meant to run on the machine
-# where your agents live (a server), so everything survives a closed laptop.
+# Opens a 2x2 tmux grid, one folder per pane. Run it on the machine where your
+# agents live (a server) so everything survives a closed laptop.
 #
 #   panel                      4 empty shells in $HOME
-#   panel -c                   start `claude` in every pane
-#   panel -c ~/api ~/web - -   different folders ("-" = $HOME)
+#   panel -c                   start `claude` in every pane except "-"
+#   panel -c ~/api ~/web - -   different folders ("-" = $HOME = empty shell)
 #
-# Already running? It just attaches. Detach without stopping anything: Ctrl-a d
+# Each pane gets a stable label (tmux pane option @label) shown on its top border;
+# `ask-agent` uses it to find panes. Already running? It just attaches.
+# Detach without stopping anything: Ctrl-a d (or Ctrl-b d with default tmux config).
+#
+# Optional: if `trust-folders` is installed, folders are pre-trusted before Claude starts.
 set -e
 SESSION=${PANEL_SESSION:-panel}
 START_CLAUDE=0
@@ -31,14 +35,16 @@ P2=$(tmux split-window -h -P -F '#{pane_id}' -t "$P1" -c "$D2")
 P3=$(tmux split-window -v -P -F '#{pane_id}' -t "$P1" -c "$D3")
 P4=$(tmux split-window -v -P -F '#{pane_id}' -t "$P2" -c "$D4")
 
-# Show the folder name on top of every pane
 tmux set-option -w -t "$SESSION:^" pane-border-status top
-tmux set-option -w -t "$SESSION:^" pane-border-format ' #{pane_title} '
+tmux set-option -w -t "$SESSION:^" pane-border-format ' #{@label} '
 
 for pair in "$P1:$D1" "$P2:$D2" "$P3:$D3" "$P4:$D4"; do
   pane=${pair%%:*}; dir=${pair#*:}
-  tmux select-pane -t "$pane" -T "$(basename "$dir")"
-  [ "$START_CLAUDE" = 1 ] && tmux send-keys -t "$pane" "claude" Enter
+  tmux set-option -p -t "$pane" @label "$(basename "$dir")"
+  if [ "$START_CLAUDE" = 1 ] && [ "$dir" != "$HOME" ]; then
+    command -v trust-folders >/dev/null && trust-folders -s "$dir" >/dev/null 2>&1 || true
+    tmux send-keys -t "$pane" "claude" Enter
+  fi
 done
 tmux select-pane -t "$P1"
 
