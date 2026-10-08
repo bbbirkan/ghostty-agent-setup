@@ -1,0 +1,19 @@
+# Local-only shell history. Nothing leaves your machine.
+auto_sync = false
+update_check = false
+
+# Never record commands that look like secrets.
+secrets_filter = true
+history_filter = [
+  "sshpass",
+  "(?i)password",
+  "(?i)token=",
+  "(?i)api[_-]?key",
+  "sk-[a-zA-Z0-9]",
+  "PASS=",
+]
+
+search_mode = "fuzzy"
+filter_mode_shell_up_key_binding = "session"   # Up arrow = this window's commands only
+style = "compact"
+inline_height = 20
