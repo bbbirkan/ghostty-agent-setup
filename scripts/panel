@@ -1,0 +1,46 @@
+#!/bin/bash
+# panel [-c] [dir1 dir2 dir3 dir4]
+# Opens a 2x2 tmux grid, one folder per pane. Meant to run on the machine
+# where your agents live (a server), so everything survives a closed laptop.
+#
+#   panel                      4 empty shells in $HOME
+#   panel -c                   start `claude` in every pane
+#   panel -c ~/api ~/web - -   different folders ("-" = $HOME)
+#
+# Already running? It just attaches. Detach without stopping anything: Ctrl-a d
+set -e
+SESSION=${PANEL_SESSION:-panel}
+START_CLAUDE=0
+[ "$1" = "-c" ] && { START_CLAUDE=1; shift; }
+
+attach() {
+  if [ -n "$TMUX" ]; then exec tmux switch-client -t "$SESSION"; else exec tmux attach -t "$SESSION"; fi
+}
+tmux has-session -t "$SESSION" 2>/dev/null && attach
+
+dir_of() {
+  case "$1" in
+    ""|"-") echo "$HOME" ;;
+    *) [ -d "$1" ] && echo "$1" || { echo "No such folder: $1" >&2; exit 1; } ;;
+  esac
+}
+D1=$(dir_of "$1"); D2=$(dir_of "$2"); D3=$(dir_of "$3"); D4=$(dir_of "$4")
+
+P1=$(tmux new-session -d -P -F '#{pane_id}' -s "$SESSION" -n panel -c "$D1")
+P2=$(tmux split-window -h -P -F '#{pane_id}' -t "$P1" -c "$D2")
+P3=$(tmux split-window -v -P -F '#{pane_id}' -t "$P1" -c "$D3")
+P4=$(tmux split-window -v -P -F '#{pane_id}' -t "$P2" -c "$D4")
+
+# Show the folder name on top of every pane
+tmux set-option -w -t "$SESSION:^" pane-border-status top
+tmux set-option -w -t "$SESSION:^" pane-border-format ' #{pane_title} '
+
+for pair in "$P1:$D1" "$P2:$D2" "$P3:$D3" "$P4:$D4"; do
+  pane=${pair%%:*}; dir=${pair#*:}
+  tmux select-pane -t "$pane" -T "$(basename "$dir")"
+  [ "$START_CLAUDE" = 1 ] && tmux send-keys -t "$pane" "claude" Enter
+done
+tmux select-pane -t "$P1"
+
+[ -n "$PANEL_NOATTACH" ] && exit 0
+attach
