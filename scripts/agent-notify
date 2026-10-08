@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+"""Claude Code hook: tell the human when an agent finished or is waiting.
+
+macOS  -> desktop notification
+Linux  -> Telegram message (or set AGENT_NOTIFY_CHANNEL=telegram on a Mac too)
+
+Wire it to three hook events (see docs/notifications.md):
+  UserPromptSubmit  starts a timer (no notification)
+  Stop              "done", but only if the turn took >= AGENT_NOTIFY_MIN_SECONDS (default 45)
+  Notification      "waiting": permission request or input needed
+
+Never blocks the agent: errors are swallowed and sending happens in a forked child.
+Telegram settings live in ~/.config/agent-notify/env (never in this script):
+  TELEGRAM_BOT_TOKEN=...
+  TELEGRAM_CHAT_ID=...
+"""
+import json
+import os
+import socket
+import sys
+import time
+
+MIN_SECONDS = int(os.environ.get("AGENT_NOTIFY_MIN_SECONDS", "45"))
+STATE_DIR = os.path.expanduser("~/.cache/agent-notify")
+ENV_FILE = os.path.expanduser("~/.config/agent-notify/env")
+
+
+def env_value(key):
+    if os.environ.get(key):
+        return os.environ[key]
+    try:
+        for line in open(ENV_FILE, encoding="utf-8"):
+            if line.startswith(key + "="):
+                return line.split("=", 1)[1].strip().strip("'\"")
+    except OSError:
+        pass
+    return ""
+
+
+def send_desktop(text):
+    safe = text.replace("\\", "\\\\").replace('"', '\\"')
+    os.system(f"osascript -e 'display notification \"{safe}\" with title \"Claude Code\" sound name \"Glass\"' >/dev/null 2>&1")
+
+
+def send_telegram(text):
+    import urllib.parse
+    import urllib.request
+
+    token, chat = env_value("TELEGRAM_BOT_TOKEN"), env_value("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        return
+    data = urllib.parse.urlencode({"chat_id": chat, "text": text}).encode()
+    urllib.request.urlopen(f"https://api.telegram.org/bot{token}/sendMessage", data, timeout=8).read()
+
+
+def notify(text):
+    if os.environ.get("AGENT_NOTIFY_DRY"):
+        print(text)
+        return
+    if os.fork() != 0:
+        return
+    try:
+        channel = os.environ.get("AGENT_NOTIFY_CHANNEL") or ("desktop" if sys.platform == "darwin" else "telegram")
+        (send_desktop if channel == "desktop" else send_telegram)(text)
+    except Exception:
+        pass
+    os._exit(0)
+
+
+def main():
+    try:
+        data = json.load(sys.stdin)
+    except Exception:
+        return
+    event = data.get("hook_event_name", "")
+    session = str(data.get("session_id", "x"))[:36]
+    project = os.path.basename((data.get("cwd") or "").rstrip("/")) or "?"
+    host = "" if sys.platform == "darwin" else f"[{socket.gethostname()}] "
+    os.makedirs(STATE_DIR, exist_ok=True)
+    stamp = os.path.join(STATE_DIR, session)
+
+    if event == "UserPromptSubmit":
+        open(stamp, "w").write(str(time.time()))
+    elif event == "Stop":
+        try:
+            elapsed = time.time() - float(open(stamp).read())
+        except Exception:
+            return
+        if elapsed >= MIN_SECONDS:
+            notify(f"✅ {host}{project}: done ({int(elapsed // 60)} min {int(elapsed % 60)} s)")
+    elif event == "Notification":
+        notify(f"⏳ {host}{project}: {data.get('message', 'needs your attention')}")
+
+
+if __name__ == "__main__":
+    main()
