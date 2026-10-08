@@ -1,0 +1,22 @@
+# Ghostty config for running AI coding agents (Claude Code, Codex, ...).
+# Reload after editing: Cmd+Shift+,   Open settings: Cmd+,
+# Undo everything: delete this file (Ghostty falls back to its defaults).
+
+# Looks
+theme = Catppuccin Mocha
+font-size = 14
+
+# Left Option acts as Alt, so atuin / lazygit / tmux shortcuts work.
+# Right Option still types special characters (é, ü, ...).
+macos-option-as-alt = left
+
+# When you ssh into a server, Ghostty installs its terminal definition there.
+# Without this, tmux/lazygit on the server can fail with "unsuitable terminal".
+shell-integration-features = ssh-terminfo,ssh-env
+
+# Quit and reopen: windows, tabs and splits come back.
+window-save-state = always
+
+# Ask before closing a window that still has a running job,
+# so a long agent run is never killed by an accidental Cmd+W.
+confirm-close-surface = true
