@@ -89,7 +89,7 @@ scripts/agent-notify      Desktop / Telegram ping when an agent is done or waiti
 scripts/trust-folders     Pre-answer Claude Code's "trust this folder?" for YOUR projects
 templates/                Shared-notes file and kick-off text for caravan mode
 install.sh                Mac installer (supports --dry-run)
-docs/                     Cheatsheet, caravan mode, notifications, trust prompt, server, troubleshooting
+docs/                     Cheatsheet, readability (themes), caravan mode, notifications, trust prompt, server, troubleshooting
 ```
 
 ### Built to be safe around agents
@@ -129,7 +129,7 @@ Want to undo it? Delete the symlinks in `~/.config/` and the one line the instal
 | Run 4 agents at once (server) | `panel -c ~/api ~/web ~/docs ~/ops` |
 | Leave a server session running | `Ctrl-a` then `d` — **never** type `exit` |
 
-More: [`docs/cheatsheet.md`](docs/cheatsheet.md).
+More: [`docs/cheatsheet.md`](docs/cheatsheet.md). Tired eyes? Themes, font size and contrast: [`docs/readability.md`](docs/readability.md).
 
 ---
 
