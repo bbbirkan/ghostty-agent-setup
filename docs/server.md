@@ -33,6 +33,16 @@ cp tmux/tmux.conf ~/.tmux.conf
 sudo install -m755 scripts/panel /usr/local/bin/panel
 ```
 
+### Helper scripts (optional but recommended)
+
+```bash
+sudo install -m755 scripts/panel scripts/ask-agent scripts/trust-folders /usr/local/bin/
+sudo install -m755 scripts/agent-notify /usr/local/bin/agent-notify
+mkdir -p ~/agents-shared && cp templates/NOTES.md templates/KICKOFF.txt ~/agents-shared/
+```
+
+See [caravan-mode.md](caravan-mode.md), [notifications.md](notifications.md) and [trust-prompt.md](trust-prompt.md).
+
 ## 3. Make Ghostty and the server get along
 
 `ghostty/config` already contains `shell-integration-features = ssh-terminfo,ssh-env`.
