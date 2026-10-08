@@ -42,6 +42,26 @@ The deeper reasoning is in [`docs/why-these-tools.md`](docs/why-these-tools.md).
 
 ---
 
+## Caravan mode: several agents at once
+
+Run a few agents side by side on one screen, **each in its own project folder** so they cannot
+overwrite each other, and be told when one needs you:
+
+```bash
+panel -c ~/api ~/web ~/docs -     # on the server: 3 Claude agents + 1 empty shell
+```
+
+| Piece | What it does | Guide |
+|---|---|---|
+| `panel` | 2x2 tmux grid, labelled panes, survives a closed laptop | [caravan-mode.md](docs/caravan-mode.md) |
+| shared notes + `ask-agent` | Agents read and write a common log and can message each other (max 3/min) | [caravan-mode.md](docs/caravan-mode.md) |
+| `agent-notify` | ✅ done / ⏳ waiting, as a Mac notification or a Telegram message | [notifications.md](docs/notifications.md) |
+| `trust-folders` | Stops the "trust this folder?" question for your own projects | [trust-prompt.md](docs/trust-prompt.md) |
+
+Rule of thumb: **one agent per folder**. Two agents on the same repo? Give each its own `git worktree`.
+
+---
+
 ## What about a browser?
 
 **Ghostty has no built-in browser** (its feature docs mention none). That is the main thing cmux adds.
@@ -64,8 +84,12 @@ shell/terminal-stack.bash Same idea for a Linux server (bash)
 tmux/tmux.conf            Server tmux: Ctrl-a prefix, mouse on, easy splits
 atuin/config.toml         Local-only history that never records secrets
 scripts/panel             One command → a 2x2 grid of agents on your server
+scripts/ask-agent         One agent sends a short request to another (with loop protection)
+scripts/agent-notify      Desktop / Telegram ping when an agent is done or waiting
+scripts/trust-folders     Pre-answer Claude Code's "trust this folder?" for YOUR projects
+templates/                Shared-notes file and kick-off text for caravan mode
 install.sh                Mac installer (supports --dry-run)
-docs/                     Cheatsheet, server guide, troubleshooting
+docs/                     Cheatsheet, caravan mode, notifications, trust prompt, server, troubleshooting
 ```
 
 ### Built to be safe around agents
@@ -126,7 +150,9 @@ Step-by-step (install the tools on Ubuntu, copy `tmux.conf`, add `panel`): [`doc
 ## Honest limits
 
 - **macOS-first.** `install.sh` is for Mac. The server instructions were verified by hand on **Ubuntu 24.04**; other distros need small package-name changes.
-- `panel -c` simply types `claude` into each pane. Do not point two agents at the **same folder** — they can overwrite each other's files.
+- `panel -c` simply types `claude` into each pane (not into panes marked `-`). Do not point two agents at the **same folder** — they can overwrite each other's files.
+- Agent-to-agent messaging is convenient but can spread one agent's mistake to another. Start with no links, add the shared notes file next, `ask-agent` last.
+- `trust-folders` edits Claude Code's own config file. Use it only for code you wrote or trust; it skips other people's repos by default.
 - Lazygit 0.66 offered to create a git repo (and then crashed) when launched **outside** a git project. Answer **N** and `cd` into a project first.
 
 ---
