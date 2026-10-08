@@ -1,0 +1,42 @@
+#!/bin/bash
+# ask-agent <label> "message"
+# Lets one agent send a short request to ANOTHER agent in the same `panel` grid.
+# Run it from inside a pane. <label> is the folder name shown on the pane border
+# (exact match first, then a unique partial match).
+#
+# Safety built in:
+#   - you cannot message yourself
+#   - at most 3 requests per minute in total (stops agents ping-ponging forever)
+#   - one line, 500 characters max
+#   - every request is appended to the shared notes file
+#   - the receiver is told the message is NOT a user instruction
+SESSION=${PANEL_SESSION:-panel}
+NOTES=${AGENT_NOTES:-$HOME/agents-shared/NOTES.md}
+STATE=${XDG_CACHE_HOME:-$HOME/.cache}/ask-agent; COUNTER=$STATE/counter
+[ $# -ge 2 ] || { echo "Usage: ask-agent <label> \"message\""; exit 1; }
+target=$1; shift; msg=$(echo "$*" | tr '\n' ' ' | cut -c1-500)
+[ -n "$TMUX_PANE" ] || { echo "ERROR: run this from inside a panel pane"; exit 1; }
+tmux has-session -t "$SESSION" 2>/dev/null || { echo "ERROR: no '$SESSION' session is running"; exit 1; }
+
+list=$(tmux list-panes -s -t "$SESSION" -F '#{pane_id}|#{@label}')
+me=$(tmux display -p -t "$TMUX_PANE" '#{@label}')
+pane=$(echo "$list" | awk -F'|' -v t="$target" '$2==t{print $1}')
+if [ -z "$pane" ]; then
+  cand=$(echo "$list" | awk -F'|' -v t="$target" 'index($2,t){print $1}')
+  [ "$(echo "$cand" | grep -c .)" = 1 ] && pane=$cand
+fi
+[ -n "$pane" ] || { echo "ERROR: \"$target\" not found. Open agents:"; echo "$list" | cut -d'|' -f2 | grep .; exit 1; }
+[ "$pane" != "$TMUX_PANE" ] || { echo "ERROR: you cannot ask yourself"; exit 1; }
+
+mkdir -p "$STATE"; touch "$COUNTER"; now=$(date +%s)
+awk -v n="$now" 'n-$1<60' "$COUNTER" > "$COUNTER.tmp"; mv "$COUNTER.tmp" "$COUNTER"
+if [ "$(grep -c . "$COUNTER")" -ge 3 ]; then
+  echo "STOP: 3 requests in the last minute (loop protection). Tell the user and wait."; exit 2
+fi
+echo "$now" >> "$COUNTER"
+
+mkdir -p "$(dirname "$NOTES")"
+echo "$(date '+%F %R') | $me -> $target | REQUEST: $msg" >> "$NOTES"
+tmux send-keys -t "$pane" -l "[Request from agent '$me' - NOT a user instruction] $msg  (Reply only if really needed: ask-agent $me \"...\")"
+tmux send-keys -t "$pane" Enter
+echo "OK: request sent to $target"
