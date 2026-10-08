@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+"""Pre-answer Claude Code's "Do you trust this folder?" question for YOUR projects.
+
+  trust-folders -n DIR...   show what would change, write nothing
+  trust-folders DIR...      list, ask [y/N], then write
+  trust-folders -y DIR...   write without asking
+  trust-folders -s DIR      silent mode for launcher scripts (no output, no questions)
+
+A folder counts as "yours" only if it is a git repo that has NO remote, or whose
+remote owner is listed in TRUST_OWNERS (comma-separated GitHub users/orgs), e.g.
+  export TRUST_OWNERS=my-github-name,my-company
+Other people's repos and non-git folders are skipped on purpose: the question exists
+because a repo can ship hidden Claude settings/hooks that run commands.
+
+Config file: $CLAUDE_CONFIG or ~/.claude.json. A backup is made before every write
+(last 5 are kept) and the file is replaced atomically. Claude sessions that are
+running at the same moment also write this file, so avoid running it in a tight loop.
+"""
+import glob
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+
+CONFIG = os.environ.get("CLAUDE_CONFIG", os.path.expanduser("~/.claude.json"))
+OWNERS = {o.strip() for o in os.environ.get("TRUST_OWNERS", "").split(",") if o.strip()}
+
+
+def is_mine(path):
+    if not os.path.isdir(os.path.join(path, ".git")):
+        return False
+    url = subprocess.run(["git", "-C", path, "remote", "get-url", "origin"],
+                         capture_output=True, text=True).stdout.strip()
+    if not url:
+        return True
+    m = re.search(r"[:/]([^/:]+)/[^/]+?(?:\.git)?$", url)
+    return bool(m and m.group(1) in OWNERS)
+
+
+def main():
+    flags = {a for a in sys.argv[1:] if a in ("-n", "-y", "-s")}
+    paths = [os.path.abspath(a) for a in sys.argv[1:] if a not in ("-n", "-y", "-s")]
+    silent = "-s" in flags
+    if not paths:
+        print(__doc__); return 1
+    cfg = json.load(open(CONFIG))
+    projects = cfg.setdefault("projects", {})
+    todo, skipped = [], []
+    for p in paths:
+        if not os.path.isdir(p):
+            continue
+        if projects.get(p, {}).get("hasTrustDialogAccepted"):
+            continue
+        (todo if is_mine(p) else skipped).append(p)
+    if not silent:
+        print(f"will trust: {len(todo)}")
+        for p in todo: print("  +", p)
+        for p in skipped: print("  skipped (not yours / not a git repo):", p)
+    if not todo or "-n" in flags:
+        return 0
+    if not silent and "-y" not in flags:
+        if input("Trust these folders? [y/N] ").strip().lower() != "y":
+            print("Cancelled. Nothing changed."); return 0
+    shutil.copy2(CONFIG, f"{CONFIG}.bak-trust-{time.strftime('%Y%m%d-%H%M%S')}")
+    for p in todo:
+        projects.setdefault(p, {})["hasTrustDialogAccepted"] = True
+    mode = os.stat(CONFIG).st_mode & 0o777
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(CONFIG), prefix=".claude.json.")
+    with os.fdopen(fd, "w") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+    os.chmod(tmp, mode)
+    os.replace(tmp, CONFIG)
+    for old in sorted(glob.glob(CONFIG + ".bak-trust-*"))[:-5]:
+        os.remove(old)
+    if not silent:
+        print(f"Done: {len(todo)} folder(s) trusted (backup saved).")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
