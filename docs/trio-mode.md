@@ -43,7 +43,7 @@ The lead merges `trio-a` and `trio-b` into `trio-lead`, builds and tests. You pu
 Three idle Claude Code panes use roughly **2 GB RAM** and some CPU (measured), but no tokens.
 - `trio close` stops all three. Logins stay in `~/.trio/claude-*`; `trio` brings them back without `/login`.
 - `Ctrl-a d` (or `Ctrl-b d`) only leaves; the agents keep running.
-- Watchdog (closes it when nobody is attached and nothing was printed for 2 hours):
+- Watchdog (closes it when nobody is attached and no pane's screen changed for 2 hours — the status line is ignored):
   ```cron
   */30 * * * * /usr/local/bin/trio watchdog     # TRIO_IDLE_HOURS=4 to change the limit
   ```

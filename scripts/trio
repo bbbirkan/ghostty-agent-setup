@@ -17,8 +17,12 @@ close) tmux kill-session -t "$SESSION" 2>/dev/null && echo "trio closed (logins 
 watchdog)
   tmux has-session -t "$SESSION" 2>/dev/null || exit 0
   [ "$(tmux display -p -t "$SESSION" '#{session_attached}')" = 0 ] || exit 0
-  last=$(tmux list-panes -s -t "$SESSION" -F '#{window_activity}' | sort -n | tail -1)
-  [ $(( $(date +%s) - last )) -gt $(( ${TRIO_IDLE_HOURS:-2} * 3600 )) ] && tmux kill-session -t "$SESSION" && echo "$(date '+%F %H:%M') watchdog: idle → closed" >> "$T/trio.log"
+  # not window_activity: Claude Code redraws its status line every few seconds, so it never looks idle.
+  # Hash each pane's screen minus the bottom 10 lines (status area); idle = unchanged since the last change time.
+  h=$(for p in $(tmux list-panes -s -t "$SESSION" -F '#{pane_id}'); do tmux capture-pane -p -t "$p" -S -300 -E -10; done | md5sum | cut -c1-32)
+  read -r old since 2>/dev/null < "$T/.watchdog" || true
+  [ "$h" = "$old" ] || { echo "$h $(date +%s)" > "$T/.watchdog"; exit 0; }
+  [ $(( $(date +%s) - since )) -gt $(( ${TRIO_IDLE_HOURS:-2} * 3600 )) ] && tmux kill-session -t "$SESSION" && rm -f "$T/.watchdog" && echo "$(date '+%F %H:%M') watchdog: idle → closed" >> "$T/trio.log"
   exit 0 ;;
 --pane)  # internal: runs inside one pane
   a=$2; label=$(echo "$a" | tr a-z A-Z)
