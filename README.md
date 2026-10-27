@@ -60,6 +60,20 @@ panel -c ~/api ~/web ~/docs -     # on the server: 3 Claude agents + 1 empty she
 
 Rule of thumb: **one agent per folder**. Two agents on the same repo? Give each its own `git worktree`.
 
+## Trio mode: one lead, two sandboxes, one repo
+
+Want several agents on the **same** project? `trio` opens three panes side by side — **LEAD | A | B**.
+The lead splits the work; A and B each get their own `git worktree` (no collisions) and, if you like,
+their **own Claude account** (`/login` once per pane, it stays there). They coordinate through one
+append-only board.
+
+```bash
+cd ~/my-project && trio     # on the server; same command re-attaches
+trio close                  # stop all three (logins kept) — idle agents use ~2 GB RAM
+```
+
+Guide: [trio-mode.md](docs/trio-mode.md)
+
 ---
 
 ## What about a browser?
@@ -85,11 +99,12 @@ tmux/tmux.conf            Server tmux: Ctrl-a prefix, mouse on, easy splits
 atuin/config.toml         Local-only history that never records secrets
 scripts/panel             One command → a 2x2 grid of agents on your server
 scripts/ask-agent         One agent sends a short request to another (with loop protection)
+scripts/trio              LEAD | A | B on one repo: own worktree + own account per pane, shared board
 scripts/agent-notify      Desktop / Telegram ping when an agent is done or waiting
 scripts/trust-folders     Pre-answer Claude Code's "trust this folder?" for YOUR projects
 templates/                Shared-notes file and kick-off text for caravan mode
 install.sh                Mac installer (supports --dry-run)
-docs/                     Cheatsheet, readability (themes), caravan mode, notifications, trust prompt, server, troubleshooting
+docs/                     Cheatsheet, readability (themes), caravan mode, trio mode, notifications, trust prompt, server, troubleshooting
 ```
 
 ### Built to be safe around agents

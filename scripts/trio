@@ -1,0 +1,55 @@
+#!/bin/bash
+# trio [repo]     Lead + 2 sandbox agents on ONE git repo, side by side in tmux:  LEAD | A | B
+# trio close      Stop all three (logins are kept; `trio` brings them back)
+# trio watchdog   For cron: close the session if nobody is attached and no pane printed anything for $TRIO_IDLE_HOURS (default 2)
+#
+# Each pane gets its own git worktree (branch trio-lead / trio-a / trio-b) so agents never overwrite each other,
+# and its own Claude config dir, so each pane can be logged in to a DIFFERENT Claude account (/login once per pane;
+# it stays there). Settings, skills, agents and plugins are shared with ~/.claude through symlinks.
+# Agents coordinate through an append-only board ($TRIO_HOME/BOARD.md). Pane labels use @label, so `ask-agent` works too.
+set -e
+SESSION=${TRIO_SESSION:-trio}
+T=${TRIO_HOME:-$HOME/.trio}
+BOARD=$T/BOARD.md
+
+case "$1" in
+close) tmux kill-session -t "$SESSION" 2>/dev/null && echo "trio closed (logins kept; run: trio)" || echo "trio is not running"; exit 0 ;;
+watchdog)
+  tmux has-session -t "$SESSION" 2>/dev/null || exit 0
+  [ "$(tmux display -p -t "$SESSION" '#{session_attached}')" = 0 ] || exit 0
+  last=$(tmux list-panes -s -t "$SESSION" -F '#{window_activity}' | sort -n | tail -1)
+  [ $(( $(date +%s) - last )) -gt $(( ${TRIO_IDLE_HOURS:-2} * 3600 )) ] && tmux kill-session -t "$SESSION" && echo "$(date '+%F %H:%M') watchdog: idle → closed" >> "$T/trio.log"
+  exit 0 ;;
+--pane)  # internal: runs inside one pane
+  a=$2; label=$(echo "$a" | tr a-z A-Z)
+  tmux set -p -t "$TMUX_PANE" @label "$label"
+  export CLAUDE_CONFIG_DIR=$T/claude-$a
+  if [ ! -d "$CLAUDE_CONFIG_DIR" ]; then
+    mkdir -p "$CLAUDE_CONFIG_DIR"
+    for x in settings.json CLAUDE.md agents commands skills plugins hooks rules; do [ -e "$HOME/.claude/$x" ] && ln -s "$HOME/.claude/$x" "$CLAUDE_CONFIG_DIR/$x"; done
+    # copy the global config WITHOUT the login, and pre-trust this pane's worktree
+    [ -f "$HOME/.claude.json" ] && python3 -c "import json,sys;d=json.load(open(sys.argv[1]));[d.pop(k,None) for k in ('oauthAccount','userID')];d.setdefault('projects',{}).setdefault(sys.argv[3],{})['hasTrustDialogAccepted']=True;json.dump(d,open(sys.argv[2],'w'))" "$HOME/.claude.json" "$CLAUDE_CONFIG_DIR/.claude.json" "$T/w/$a"
+  fi
+  if [ "$a" = lead ]; then role="TRIO — you are the LEAD. Two sandbox agents work next to you: A ($T/w/a, branch trio-a) and B ($T/w/b, branch trio-b); you are in $T/w/lead (branch trio-lead). Shared board: $BOARD — read it before every task. Split the user's work into small, non-overlapping pieces and write them to the board as '## To A: …' / '## To B: …' (name the files, so they never touch the same file). When A/B write 'done', merge their branches into yours, build and test. Do not push without the user's OK."
+  else role="TRIO — you are agent $label in your own sandbox: this folder is a separate git worktree (branch trio-$a). Work ONLY here. Shared board: $BOARD — read it before and after every task; do what is written '## To $label: …'. Append (never edit or delete) one line when you start ('- $label started: <task> · files: …') and when you finish ('- $label done: <summary> · commit <sha>'). Commit to your branch; never push — the LEAD merges."; fi
+  cd "$T/w/$a" && claude --append-system-prompt "$role" || true
+  exec bash -l ;;
+esac
+
+tmux has-session -t "$SESSION" 2>/dev/null && exec tmux attach -t "$SESSION"
+REPO=$(cd "${1:-.}" && git rev-parse --show-toplevel) || { echo "trio: run it inside a git repo, or: trio /path/to/repo"; exit 1; }
+mkdir -p "$T/w"; [ -f "$BOARD" ] || printf '# TRIO BOARD — LEAD + A + B (append-only, never delete lines)\nrepo: %s\n' "$REPO" > "$BOARD"
+for a in lead a b; do [ -d "$T/w/$a" ] || git -C "$REPO" worktree add -q -B "trio-$a" "$T/w/$a" HEAD; done
+self=$(command -v trio || echo "$0")
+E=(-e "TRIO_HOME=$T" -e "TRIO_SESSION=$SESSION")  # tmux does not pass the caller's environment to new panes
+tmux new-session -d -s "$SESSION" -x 240 -y 60 "${E[@]}" "$self --pane lead"
+tmux set -t "$SESSION" pane-border-status top
+tmux set -t "$SESSION" pane-border-format " #{@label} "
+tmux set -t "$SESSION" mouse on
+tmux split-window -h -t "$SESSION" "${E[@]}" "$self --pane a"
+tmux split-window -h -t "$SESSION" "${E[@]}" "$self --pane b"
+tmux select-layout -t "$SESSION" even-horizontal
+tmux set-hook -t "$SESSION" client-attached "select-layout -t $SESSION even-horizontal"
+tmux set-hook -t "$SESSION" client-resized "select-layout -t $SESSION even-horizontal"
+tmux select-pane -t "$SESSION:.0"
+exec tmux attach -t "$SESSION"
