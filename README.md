@@ -176,3 +176,6 @@ Step-by-step (install the tools on Ubuntu, copy `tmux.conf`, add `panel`): [`doc
 
 Issues and pull requests are welcome — especially for Linux desktops and other shells.
 Released under the [MIT License](LICENSE).
+
+## Devir uyarısı (2026-10-27, Birkan)
+Bağlam devir uyarısı (baglam_bekcisi UserPromptSubmit kancası) KAPALI: sunucuda ~/.claude ve ~/.claude-uclu-{y,a,b} settings.json dosyalarından çıkarıldı. Bağlam yalnız durum çubuğunda (kırmızı) görünür; ajan eşik gelince uyarmadan kendisi devreder.
